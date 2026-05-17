@@ -1,10 +1,17 @@
 # Local configuration
 .env
+.env.*
+!.env-example
 CONTEXTO.md
 
 # Python cache
 __pycache__/
 *.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
 # Generated media
 snapshots/
@@ -20,6 +27,6 @@ Thumbs.db
 .vscode/
 .idea/
 
-#logs
+# Logs
+*.log
 server-identification-test.err.log
-server-identification-test.log
