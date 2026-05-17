@@ -25,6 +25,24 @@ O projeto fornece um painel simples para mover a camera, controlar zoom, assisti
 - FFmpeg para video, audio, snapshots, thumbnails e gravacoes
 - HTML, CSS e JavaScript sem framework
 
+## Camera testada
+
+O app foi testado com uma camera ONVIF identificada como:
+
+```text
+Fabricante: Technology
+Modelo: IPC
+Firmware: 21.00.01.36
+Hardware: Ver 2.1
+```
+
+Profiles usados nos testes:
+
+```text
+IPCProfilesToken0 · MainStream · H264 · 1280x720
+IPCProfilesToken1 · SubStream · H264 · 320x180
+```
+
 ## Como rodar
 
 Instale as dependencias:
