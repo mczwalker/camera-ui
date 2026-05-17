@@ -1,0 +1,1475 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Controle da Camera</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #111318;
+        --panel: #1b2028;
+        --panel-2: #242b34;
+        --text: #edf1f7;
+        --muted: #9ba7b6;
+        --line: #364151;
+        --accent: #39a88e;
+        --danger: #e05b64;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--text);
+        font-family: Arial, Helvetica, sans-serif;
+      }
+
+      .app-nav {
+        width: min(1180px, calc(100vw - 32px));
+        margin: 0 auto;
+        padding: 18px 0 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .nav-title {
+        font-weight: 700;
+      }
+
+      .nav-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .nav-actions button {
+        min-height: 38px;
+        padding: 0 14px;
+        font-size: 14px;
+      }
+
+      main {
+        width: min(1180px, calc(100vw - 32px));
+        margin: 0 auto;
+        padding: 16px 0 24px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 320px;
+        gap: 18px;
+      }
+
+      .stream-panel,
+      .control-panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+
+      .topbar {
+        height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 0 14px;
+        border-bottom: 1px solid var(--line);
+        background: #171b22;
+      }
+
+      .title {
+        font-weight: 700;
+      }
+
+      .meta,
+      .status {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .viewer {
+        position: relative;
+        aspect-ratio: 16 / 9;
+        min-height: 280px;
+        background: #080a0d;
+        display: grid;
+        place-items: center;
+      }
+
+      .viewer img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        display: none;
+      }
+
+      .placeholder {
+        max-width: 620px;
+        padding: 24px;
+        text-align: center;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      .placeholder strong {
+        color: var(--text);
+      }
+
+      .rtsp {
+        margin-top: 12px;
+        padding: 10px 12px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: #111820;
+        color: var(--text);
+        overflow-wrap: anywhere;
+        font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+        font-size: 13px;
+      }
+
+      .control-panel {
+        padding: 14px;
+      }
+
+      .section {
+        margin-bottom: 18px;
+      }
+
+      .section h2 {
+        margin: 0 0 10px;
+        font-size: 15px;
+      }
+
+      .pad {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+      }
+
+      button {
+        min-height: 54px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel-2);
+        color: var(--text);
+        font-size: 22px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      button:hover {
+        border-color: var(--accent);
+      }
+
+      button:active,
+      button.active {
+        background: var(--accent);
+        color: #06130f;
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.45;
+        background: #1c222b;
+        color: #6f7b8a;
+        border-color: var(--line);
+      }
+
+      button:disabled:hover,
+      button:disabled:active,
+      button:disabled.active {
+        background: #1c222b;
+        color: #6f7b8a;
+        border-color: var(--line);
+      }
+
+      .blank {
+        visibility: hidden;
+      }
+
+      .stop {
+        background: #312027;
+        border-color: #5b3038;
+        color: #ffd8dc;
+        font-size: 16px;
+      }
+
+      .zoom-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+
+      .zoom-row button {
+        font-size: 18px;
+      }
+
+      .capture-row {
+        display: grid;
+        grid-template-columns: 1fr;
+      }
+
+      .capture-row button {
+        min-height: 46px;
+        font-size: 16px;
+      }
+
+      .audio-row {
+        display: grid;
+        grid-template-columns: 96px 1fr;
+        align-items: end;
+        gap: 10px;
+      }
+
+      .audio-row button {
+        min-height: 42px;
+        font-size: 15px;
+      }
+
+      label {
+        display: grid;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      input[type="range"] {
+        width: 100%;
+        accent-color: var(--accent);
+      }
+
+      .values {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+
+      .readout {
+        margin-top: 8px;
+        min-height: 20px;
+      }
+
+      .gallery {
+        width: min(1180px, calc(100vw - 32px));
+        margin: 0 auto;
+        padding: 16px 0 24px;
+      }
+
+      .gallery[hidden],
+      main[hidden] {
+        display: none;
+      }
+
+      .gallery-head {
+        height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 0 14px;
+        background: #171b22;
+      }
+
+      .gallery-head button {
+        min-height: 34px;
+        padding: 0 12px;
+        font-size: 14px;
+      }
+
+      .gallery-grid {
+        margin-top: 14px;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+        gap: 14px;
+      }
+
+      .media-card {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        overflow: hidden;
+        background: var(--panel);
+      }
+
+      .media-card img,
+      .video-thumb {
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        display: block;
+        object-fit: contain;
+        background: #080a0d;
+      }
+
+      .media-card img,
+      .video-thumb {
+        cursor: zoom-in;
+      }
+
+      .video-thumb {
+        position: relative;
+        border: 0;
+        border-radius: 0;
+        padding: 0;
+        min-height: 0;
+      }
+
+      .video-thumb::after {
+        content: "▶";
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 46px;
+        height: 46px;
+        transform: translate(-50%, -50%);
+        display: grid;
+        place-items: center;
+        color: var(--text);
+        font-size: 20px;
+        background: rgba(0, 0, 0, 0.45);
+        border: 1px solid rgba(255, 255, 255, 0.22);
+        border-radius: 50%;
+      }
+
+      .media-info {
+        padding: 10px;
+        display: grid;
+        gap: 4px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .media-title-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 28px;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .media-name {
+        color: var(--text);
+        overflow-wrap: anywhere;
+      }
+
+      .delete-media {
+        min-height: 28px;
+        width: 28px;
+        border-radius: 6px;
+        font-size: 16px;
+        line-height: 1;
+        color: #ffd8dc;
+        background: #312027;
+        border-color: #5b3038;
+      }
+
+      .empty-gallery {
+        margin-top: 14px;
+        padding: 24px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        color: var(--muted);
+        background: var(--panel);
+      }
+
+      .identification {
+        width: min(1180px, calc(100vw - 32px));
+        margin: 0 auto;
+        padding: 16px 0 24px;
+      }
+
+      .identification[hidden] {
+        display: none;
+      }
+
+      .info-grid {
+        margin-top: 14px;
+        display: grid;
+        gap: 12px;
+      }
+
+      .summary-grid {
+        margin-top: 14px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+        gap: 12px;
+      }
+
+      .info-card {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        overflow: hidden;
+        background: var(--panel);
+      }
+
+      .info-card h2 {
+        margin: 0;
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--line);
+        font-size: 15px;
+        background: #171b22;
+      }
+
+      .info-card summary {
+        cursor: pointer;
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--line);
+        font-size: 15px;
+        font-weight: 700;
+        background: #171b22;
+      }
+
+      .info-card pre {
+        margin: 0;
+        padding: 12px 14px;
+        overflow: auto;
+        color: var(--text);
+        font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .info-list {
+        margin: 0;
+        padding: 12px 14px;
+        display: grid;
+        gap: 8px;
+        font-size: 13px;
+      }
+
+      .info-row {
+        display: grid;
+        grid-template-columns: 130px minmax(0, 1fr);
+        gap: 10px;
+      }
+
+      .info-key {
+        color: var(--muted);
+      }
+
+      .info-value {
+        color: var(--text);
+        overflow-wrap: anywhere;
+      }
+
+      .info-error {
+        color: var(--danger);
+      }
+
+      .setup-form {
+        margin-top: 14px;
+        display: grid;
+        gap: 14px;
+      }
+
+      .form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 12px;
+      }
+
+      .form-grid input,
+      .form-grid select {
+        min-height: 38px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 0 10px;
+        background: #111820;
+        color: var(--text);
+      }
+
+      .setup-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .setup-actions button {
+        min-height: 40px;
+        padding: 0 14px;
+        font-size: 14px;
+      }
+
+      .inline-action {
+        min-height: 34px;
+        padding: 0 12px;
+        font-size: 13px;
+      }
+
+      .modal {
+        position: fixed;
+        inset: 0;
+        z-index: 20;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        overflow: hidden;
+        background: rgba(0, 0, 0, 0.78);
+      }
+
+      .modal[hidden] {
+        display: none;
+      }
+
+      .modal-content {
+        width: min(960px, calc(100vw - 48px));
+        display: grid;
+        grid-template-rows: auto auto;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        overflow: hidden;
+        background: var(--panel);
+      }
+
+      .modal-bar {
+        min-height: 46px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 0 12px;
+        border-bottom: 1px solid var(--line);
+        background: #171b22;
+      }
+
+      .modal-title {
+        overflow-wrap: anywhere;
+        font-size: 14px;
+        color: var(--text);
+      }
+
+      .modal-close {
+        min-height: 34px;
+        width: 38px;
+        font-size: 18px;
+      }
+
+      .modal-body {
+        width: min(960px, calc(100vw - 48px));
+        aspect-ratio: 960 / 576;
+        display: grid;
+        place-items: center;
+        background: #080a0d;
+      }
+
+      .modal-body > div {
+        width: 100%;
+        height: 100%;
+      }
+
+      .modal-body img,
+      .modal-body video {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        display: block;
+      }
+
+      @media (max-width: 860px) {
+        main {
+          grid-template-columns: 1fr;
+        }
+
+        .viewer {
+          min-height: 220px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="app-nav">
+      <div class="nav-title">Camera UI</div>
+      <div class="nav-actions">
+        <button id="cameraViewButton" type="button">Camera</button>
+        <button id="snapshotsViewButton" type="button">Snapshots</button>
+        <button id="recordingsViewButton" type="button">Recordings</button>
+        <button id="identificationViewButton" type="button">Identification</button>
+        <button id="setupViewButton" type="button">Setup</button>
+      </div>
+    </nav>
+
+    <main id="cameraView">
+      <section class="stream-panel">
+        <div class="topbar">
+          <div class="title">Camera</div>
+          <div id="meta" class="meta">Conectando...</div>
+        </div>
+        <div class="viewer">
+          <img id="stream" alt="Stream da camera">
+          <div id="placeholder" class="placeholder">
+            <strong>Quadro de video</strong>
+            <div id="streamText">Carregando configuracao do stream...</div>
+            <div id="rtsp" class="rtsp" hidden></div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="control-panel">
+        <div class="section">
+          <h2>Direcao</h2>
+          <div class="pad">
+            <div class="blank"></div>
+            <button data-command="up" title="Mover para cima">↑</button>
+            <div class="blank"></div>
+            <button data-command="left" title="Mover para esquerda">←</button>
+            <button data-command="stop" class="stop" title="Parar">STOP</button>
+            <button data-command="right" title="Mover para direita">→</button>
+            <div class="blank"></div>
+            <button data-command="down" title="Mover para baixo">↓</button>
+            <div class="blank"></div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h2>Zoom</h2>
+          <div class="zoom-row">
+            <button data-command="zoom-out" title="Afastar">−</button>
+            <button data-command="zoom-in" title="Aproximar">+</button>
+          </div>
+        </div>
+
+        <div class="section values">
+          <label>
+            Velocidade
+            <input id="speed" type="range" min="0.05" max="1" step="0.05" value="0.35">
+          </label>
+          <label>
+            Pulso
+            <input id="duration" type="range" min="0.1" max="1.2" step="0.05" value="0.25">
+          </label>
+        </div>
+
+        <div class="section">
+          <h2>Imagem</h2>
+          <div class="capture-row">
+            <button id="snapshotButton" type="button" title="Salvar snapshot do quadro">Snapshot</button>
+          </div>
+        </div>
+
+        <div class="section">
+          <h2>Gravacao</h2>
+          <div class="capture-row">
+            <button id="recordButton" type="button" title="Iniciar gravacao">Gravar</button>
+          </div>
+        </div>
+
+        <div class="section">
+          <h2>Audio</h2>
+          <div class="audio-row">
+            <button id="audioToggle" type="button" title="Ativar audio">Audio</button>
+            <label>
+              Volume
+              <input id="volume" type="range" min="0" max="1" step="0.05" value="0.6">
+            </label>
+          </div>
+          <audio id="audioStream" preload="none"></audio>
+        </div>
+
+        <div id="status" class="status readout">Pronto.</div>
+      </aside>
+    </main>
+
+    <section id="galleryView" class="gallery" hidden>
+      <div class="gallery-head">
+        <div>
+          <div id="galleryTitle" class="title">Galeria</div>
+          <div id="galleryMeta" class="meta">Carregando...</div>
+        </div>
+        <button id="galleryRefreshButton" type="button">Atualizar</button>
+      </div>
+      <div id="galleryGrid" class="gallery-grid"></div>
+      <div id="emptyGallery" class="empty-gallery" hidden>Nenhum arquivo encontrado.</div>
+    </section>
+
+    <section id="identificationView" class="identification" hidden>
+      <div class="gallery-head">
+        <div>
+          <div class="title">Identification</div>
+          <div id="identificationMeta" class="meta">Carregando...</div>
+        </div>
+        <button id="identificationRefreshButton" type="button">Atualizar</button>
+      </div>
+      <div id="identificationGrid" class="info-grid"></div>
+    </section>
+
+    <section id="setupView" class="identification" hidden>
+      <div class="gallery-head">
+        <div>
+          <div class="title">Setup</div>
+          <div id="setupMeta" class="meta">Carregando...</div>
+        </div>
+        <button id="setupRefreshButton" type="button">Atualizar</button>
+      </div>
+      <form id="setupForm" class="setup-form">
+        <article class="info-card">
+          <h2>Camera</h2>
+          <div class="info-list form-grid">
+            <label>IP<input id="setupCameraIp" name="CAMERA_IP"></label>
+            <label>Porta ONVIF<input id="setupCameraPort" name="CAMERA_PORT" type="number" min="1" max="65535"></label>
+            <label>Usuario<input id="setupCameraUser" name="CAMERA_USER"></label>
+            <label>Senha<input id="setupCameraPass" name="CAMERA_PASS" type="password" placeholder="manter senha atual"></label>
+          </div>
+        </article>
+
+        <article class="info-card">
+          <h2>Profiles e Stream</h2>
+          <div class="info-list form-grid">
+            <label>PTZ<select id="setupProfile" name="CAMERA_PROFILE"></select></label>
+            <label>Video<select id="setupVideoProfile" name="CAMERA_VIDEO_PROFILE"></select></label>
+            <label>Audio<select id="setupAudioProfile" name="CAMERA_AUDIO_PROFILE"></select></label>
+            <label>RTSP<select id="setupRtspTransport" name="CAMERA_RTSP_TRANSPORT">
+              <option value="udp">udp</option>
+              <option value="tcp">tcp</option>
+              <option value="udp_multicast">udp_multicast</option>
+              <option value="http">http</option>
+              <option value="https">https</option>
+            </select></label>
+            <label>Zoom<select id="setupEnableZoom" name="CAMERA_ENABLE_ZOOM">
+              <option value="auto">auto</option>
+              <option value="1">forcar ativo</option>
+              <option value="0">desativado</option>
+            </select></label>
+          </div>
+        </article>
+
+        <article class="info-card">
+          <h2>Arquivos</h2>
+          <div class="info-list form-grid">
+            <label>Snapshots<input id="setupSnapshotDir" name="CAMERA_SNAPSHOT_DIR"></label>
+            <label>Recordings<input id="setupRecordingDir" name="CAMERA_RECORDING_DIR"></label>
+          </div>
+        </article>
+
+        <article class="info-card">
+          <h2>Profiles detectados</h2>
+          <div id="setupProfilesList" class="info-list"></div>
+        </article>
+
+        <div class="setup-actions">
+          <button id="setupSaveButton" type="submit">Salvar</button>
+        </div>
+      </form>
+    </section>
+
+    <div id="imageModal" class="modal" hidden>
+      <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="imageModalTitle">
+        <div class="modal-bar">
+          <div id="imageModalTitle" class="modal-title"></div>
+          <button id="imageModalClose" class="modal-close" type="button" title="Fechar">x</button>
+        </div>
+        <div class="modal-body">
+          <div id="imageModalImg"></div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const statusEl = document.getElementById("status");
+      const cameraViewEl = document.getElementById("cameraView");
+      const galleryViewEl = document.getElementById("galleryView");
+      const identificationViewEl = document.getElementById("identificationView");
+      const setupViewEl = document.getElementById("setupView");
+      const cameraViewButtonEl = document.getElementById("cameraViewButton");
+      const snapshotsViewButtonEl = document.getElementById("snapshotsViewButton");
+      const recordingsViewButtonEl = document.getElementById("recordingsViewButton");
+      const identificationViewButtonEl = document.getElementById("identificationViewButton");
+      const setupViewButtonEl = document.getElementById("setupViewButton");
+      const galleryRefreshButtonEl = document.getElementById("galleryRefreshButton");
+      const identificationRefreshButtonEl = document.getElementById("identificationRefreshButton");
+      const setupRefreshButtonEl = document.getElementById("setupRefreshButton");
+      const galleryTitleEl = document.getElementById("galleryTitle");
+      const galleryMetaEl = document.getElementById("galleryMeta");
+      const galleryGridEl = document.getElementById("galleryGrid");
+      const emptyGalleryEl = document.getElementById("emptyGallery");
+      const identificationMetaEl = document.getElementById("identificationMeta");
+      const identificationGridEl = document.getElementById("identificationGrid");
+      const setupMetaEl = document.getElementById("setupMeta");
+      const setupFormEl = document.getElementById("setupForm");
+      const setupProfilesListEl = document.getElementById("setupProfilesList");
+      const imageModalEl = document.getElementById("imageModal");
+      const imageModalTitleEl = document.getElementById("imageModalTitle");
+      const imageModalCloseEl = document.getElementById("imageModalClose");
+      const imageModalImgEl = document.getElementById("imageModalImg");
+      const metaEl = document.getElementById("meta");
+      const streamEl = document.getElementById("stream");
+      const placeholderEl = document.getElementById("placeholder");
+      const streamTextEl = document.getElementById("streamText");
+      const rtspEl = document.getElementById("rtsp");
+      const speedEl = document.getElementById("speed");
+      const durationEl = document.getElementById("duration");
+      const audioToggleEl = document.getElementById("audioToggle");
+      const audioStreamEl = document.getElementById("audioStream");
+      const volumeEl = document.getElementById("volume");
+      const snapshotButtonEl = document.getElementById("snapshotButton");
+      const recordButtonEl = document.getElementById("recordButton");
+      let hasAudioStream = false;
+      let audioEnabled = false;
+      let recording = false;
+      let supportsZoom = true;
+      let currentGallery = "snapshots";
+
+      function setStatus(text, failed = false) {
+        statusEl.textContent = text;
+        statusEl.style.color = failed ? "var(--danger)" : "var(--muted)";
+      }
+
+      function formatBytes(bytes) {
+        if (!bytes) return "0 B";
+        const units = ["B", "KB", "MB", "GB"];
+        let value = bytes;
+        let unit = 0;
+        while (value >= 1024 && unit < units.length - 1) {
+          value /= 1024;
+          unit += 1;
+        }
+        return `${value.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
+      }
+
+      function showCamera() {
+        cameraViewEl.hidden = false;
+        galleryViewEl.hidden = true;
+        identificationViewEl.hidden = true;
+        setupViewEl.hidden = true;
+        cameraViewButtonEl.classList.add("active");
+        snapshotsViewButtonEl.classList.remove("active");
+        recordingsViewButtonEl.classList.remove("active");
+        identificationViewButtonEl.classList.remove("active");
+        setupViewButtonEl.classList.remove("active");
+      }
+
+      async function showGallery(kind) {
+        currentGallery = kind;
+        cameraViewEl.hidden = true;
+        galleryViewEl.hidden = false;
+        identificationViewEl.hidden = true;
+        setupViewEl.hidden = true;
+        cameraViewButtonEl.classList.remove("active");
+        snapshotsViewButtonEl.classList.toggle("active", kind === "snapshots");
+        recordingsViewButtonEl.classList.toggle("active", kind === "recordings");
+        identificationViewButtonEl.classList.remove("active");
+        setupViewButtonEl.classList.remove("active");
+        await loadGallery(kind);
+      }
+
+      async function showIdentification() {
+        cameraViewEl.hidden = true;
+        galleryViewEl.hidden = true;
+        identificationViewEl.hidden = false;
+        setupViewEl.hidden = true;
+        cameraViewButtonEl.classList.remove("active");
+        snapshotsViewButtonEl.classList.remove("active");
+        recordingsViewButtonEl.classList.remove("active");
+        identificationViewButtonEl.classList.add("active");
+        setupViewButtonEl.classList.remove("active");
+        await loadIdentification();
+      }
+
+      async function showSetup() {
+        cameraViewEl.hidden = true;
+        galleryViewEl.hidden = true;
+        identificationViewEl.hidden = true;
+        setupViewEl.hidden = false;
+        cameraViewButtonEl.classList.remove("active");
+        snapshotsViewButtonEl.classList.remove("active");
+        recordingsViewButtonEl.classList.remove("active");
+        identificationViewButtonEl.classList.remove("active");
+        setupViewButtonEl.classList.add("active");
+        await loadSetup();
+      }
+
+      function mediaCard(kind, item) {
+        const card = document.createElement("article");
+        card.className = "media-card";
+
+        const media = kind === "snapshots"
+          ? document.createElement("img")
+          : document.createElement("button");
+
+        if (kind === "snapshots") {
+          media.src = `${item.url}?refresh=${Date.now()}`;
+          media.alt = item.name;
+          media.addEventListener("click", () => openMediaModal("snapshot", item));
+        } else {
+          media.type = "button";
+          media.className = "video-thumb";
+          media.title = `Assistir ${item.name}`;
+          if (item.thumbUrl) {
+            media.style.backgroundImage = `url("${item.thumbUrl}?refresh=${Date.now()}")`;
+            media.style.backgroundSize = "contain";
+            media.style.backgroundRepeat = "no-repeat";
+            media.style.backgroundPosition = "center";
+          }
+          media.addEventListener("click", () => openMediaModal("recording", item));
+        }
+
+        const info = document.createElement("div");
+        info.className = "media-info";
+
+        const titleRow = document.createElement("div");
+        titleRow.className = "media-title-row";
+
+        const name = document.createElement("div");
+        name.className = "media-name";
+        name.textContent = item.name;
+
+        titleRow.appendChild(name);
+        if (kind === "snapshots" || kind === "recordings") {
+          const deleteButton = document.createElement("button");
+          deleteButton.className = "delete-media";
+          deleteButton.type = "button";
+          deleteButton.title = kind === "snapshots" ? "Excluir imagem" : "Excluir video";
+          deleteButton.textContent = "x";
+          deleteButton.addEventListener("click", () => deleteMedia(kind, item));
+          titleRow.appendChild(deleteButton);
+        }
+
+        const meta = document.createElement("div");
+        meta.textContent = `${formatBytes(item.bytes)} · ${item.modified}`;
+
+        info.append(titleRow, meta);
+        card.append(media, info);
+        return card;
+      }
+
+      async function deleteMedia(kind, item) {
+        const label = kind === "snapshots" ? "imagem" : "video";
+        const confirmed = window.confirm(`Excluir ${label} ${item.name}?`);
+        if (!confirmed) return;
+
+        try {
+          const response = await fetch(`/api/media/${kind}/${encodeURIComponent(item.name)}`, {
+            method: "DELETE"
+          });
+          const data = await response.json();
+          if (!data.ok) throw new Error(data.error || `Falha ao excluir ${label}`);
+          setStatus(`${label === "imagem" ? "Imagem" : "Video"} excluido: ${item.name}`);
+          await loadGallery(kind);
+        } catch (error) {
+          setStatus(error.message, true);
+        }
+      }
+
+      function openMediaModal(kind, item) {
+        imageModalTitleEl.textContent = item.name;
+        imageModalImgEl.replaceChildren();
+        const media = kind === "snapshot"
+          ? document.createElement("img")
+          : document.createElement("video");
+
+        media.src = `${item.url}?refresh=${Date.now()}`;
+        if (kind === "snapshot") {
+          media.alt = item.name;
+        } else {
+          media.controls = true;
+          media.autoplay = true;
+        }
+        imageModalImgEl.appendChild(media);
+        imageModalEl.hidden = false;
+      }
+
+      function closeImageModal() {
+        imageModalEl.hidden = true;
+        imageModalImgEl.replaceChildren();
+      }
+
+      function wireImageModal() {
+        imageModalCloseEl.addEventListener("click", closeImageModal);
+        imageModalEl.addEventListener("click", (event) => {
+          if (event.target === imageModalEl) {
+            closeImageModal();
+          }
+        });
+        document.addEventListener("keydown", (event) => {
+          if (event.key === "Escape" && !imageModalEl.hidden) {
+            closeImageModal();
+          }
+        });
+      }
+
+      async function loadGallery(kind = currentGallery) {
+        const label = kind === "snapshots" ? "Snapshots" : "Recordings";
+        galleryTitleEl.textContent = label;
+        galleryMetaEl.textContent = "Carregando...";
+        galleryGridEl.replaceChildren();
+        emptyGalleryEl.hidden = true;
+
+        try {
+          const response = await fetch(`/api/media/${kind}`);
+          const data = await response.json();
+          if (!data.ok) throw new Error(data.error || "Falha ao carregar galeria");
+
+          data.items.forEach((item) => {
+            galleryGridEl.appendChild(mediaCard(kind, item));
+          });
+
+          emptyGalleryEl.hidden = data.items.length > 0;
+          galleryMetaEl.textContent = `${data.items.length} arquivo(s)`;
+        } catch (error) {
+          galleryMetaEl.textContent = "Erro";
+          emptyGalleryEl.hidden = false;
+          emptyGalleryEl.textContent = error.message;
+        }
+      }
+
+      function wireNavigation() {
+        cameraViewButtonEl.addEventListener("click", showCamera);
+        snapshotsViewButtonEl.addEventListener("click", () => showGallery("snapshots"));
+        recordingsViewButtonEl.addEventListener("click", () => showGallery("recordings"));
+        identificationViewButtonEl.addEventListener("click", showIdentification);
+        setupViewButtonEl.addEventListener("click", showSetup);
+        galleryRefreshButtonEl.addEventListener("click", () => loadGallery(currentGallery));
+        identificationRefreshButtonEl.addEventListener("click", loadIdentification);
+        setupRefreshButtonEl.addEventListener("click", loadSetup);
+        setupFormEl.addEventListener("submit", saveSetup);
+      }
+
+      function infoCard(section) {
+        const card = document.createElement("details");
+        card.className = "info-card";
+
+        const title = document.createElement("summary");
+        title.textContent = section.label;
+
+        const body = document.createElement("pre");
+        if (section.ok) {
+          body.textContent = JSON.stringify(section.value, null, 2);
+        } else {
+          body.className = "info-error";
+          body.textContent = section.error || "Nao disponivel";
+        }
+
+        card.append(title, body);
+        return card;
+      }
+
+      function summaryCard(title, rows, action) {
+        const card = document.createElement("article");
+        card.className = "info-card";
+
+        const heading = document.createElement("h2");
+        heading.textContent = title;
+
+        const list = document.createElement("div");
+        list.className = "info-list";
+
+        rows.forEach(([key, value]) => {
+          const row = document.createElement("div");
+          row.className = "info-row";
+
+          const keyEl = document.createElement("div");
+          keyEl.className = "info-key";
+          keyEl.textContent = key;
+
+          const valueEl = document.createElement("div");
+          valueEl.className = "info-value";
+          valueEl.textContent = value || "Nao informado";
+
+          row.append(keyEl, valueEl);
+          list.appendChild(row);
+        });
+
+        if (action) {
+          list.appendChild(action);
+        }
+
+        card.append(heading, list);
+        return card;
+      }
+
+      function renderIdentificationSummary(summary) {
+        const grid = document.createElement("div");
+        grid.className = "summary-grid";
+
+        grid.appendChild(summaryCard("Camera", [
+          ["Fabricante", summary.device?.manufacturer],
+          ["Modelo", summary.device?.model],
+          ["Firmware", summary.device?.firmwareVersion],
+          ["Serial", summary.device?.serialNumber],
+          ["Hardware", summary.device?.hardwareId]
+        ]));
+
+        grid.appendChild(summaryCard("Conexao", [
+          ["Host", summary.connection?.host],
+          ["Porta", summary.connection?.port],
+          ["Usuario", summary.connection?.user],
+          ["PTZ profile", summary.connection?.profile],
+          ["Video profile", summary.connection?.videoProfile],
+          ["Audio profile", summary.connection?.audioProfile]
+        ]));
+
+        const networkAction = document.createElement("button");
+        networkAction.className = "inline-action";
+        networkAction.type = "button";
+        networkAction.textContent = "Verificar status";
+        networkAction.addEventListener("click", refreshNetworkStatus);
+
+        const networkRows = [
+          ["IPv4 Wi-Fi", summary.network?.ipv4],
+          ["Porta", summary.network?.port],
+          ["URL", summary.network?.url],
+          ["Firewall", summary.network?.firewall?.message]
+        ];
+        const networkCard = summaryCard("Acesso LAN", networkRows, networkAction);
+        networkCard.id = "lanAccessCard";
+        grid.appendChild(networkCard);
+
+        grid.appendChild(summaryCard("Capacidades", [
+          ["Servicos", (summary.capabilities || []).join(", ")],
+          ["Qtd. profiles", String((summary.profiles || []).length)],
+          ["Qtd. services", String((summary.services || []).length)],
+          ["Zoom PTZ", summary.ptz?.supportsZoom ? "sim" : "nao"]
+        ]));
+
+        identificationGridEl.appendChild(grid);
+
+        if (summary.profiles?.length) {
+          const profiles = document.createElement("article");
+          profiles.className = "info-card";
+          const title = document.createElement("h2");
+          title.textContent = "Profiles";
+          const list = document.createElement("div");
+          list.className = "info-list";
+          summary.profiles.forEach((profile) => {
+            const row = document.createElement("div");
+            row.className = "info-value";
+            row.textContent = `${profile.token || "sem token"} - ${profile.name || "sem nome"} - ${profile.videoEncoding || "video"} - ${profile.resolution || "sem resolucao"} - PTZ: ${profile.hasPTZ ? "sim" : "nao"} - Audio: ${profile.hasAudio ? "sim" : "nao"}`;
+            list.appendChild(row);
+          });
+          profiles.append(title, list);
+          identificationGridEl.appendChild(profiles);
+        }
+      }
+
+      async function refreshNetworkStatus() {
+        const card = document.getElementById("lanAccessCard");
+        if (!card) return;
+
+        const values = card.querySelectorAll(".info-value");
+        const button = card.querySelector("button");
+        if (button) button.disabled = true;
+        if (values[3]) values[3].textContent = "Verificando...";
+
+        try {
+          const response = await fetch("/api/network-status");
+          const data = await response.json();
+          if (!data.ok) throw new Error(data.error || "Falha ao verificar rede");
+          if (values[0]) values[0].textContent = data.ipv4 || "Nao informado";
+          if (values[1]) values[1].textContent = data.port || "Nao informado";
+          if (values[2]) values[2].textContent = data.url || "Nao informado";
+          if (values[3]) values[3].textContent = data.firewall?.message || "Firewall desconhecido";
+        } catch (error) {
+          if (values[3]) values[3].textContent = error.message;
+        } finally {
+          if (button) button.disabled = false;
+        }
+      }
+
+      async function loadIdentification() {
+        identificationMetaEl.textContent = "Consultando camera...";
+        identificationGridEl.replaceChildren();
+
+        try {
+          const response = await fetch("/api/identification");
+          const data = await response.json();
+          if (!data.ok) throw new Error(data.error || "Falha ao consultar camera");
+
+          identificationMetaEl.textContent = `${data.target} · ${data.profile}`;
+          renderIdentificationSummary(data.summary || {});
+          data.sections.forEach((section) => {
+            identificationGridEl.appendChild(infoCard(section));
+          });
+        } catch (error) {
+          identificationMetaEl.textContent = "Erro";
+          identificationGridEl.appendChild(infoCard({
+            ok: false,
+            label: "Identification",
+            error: error.message
+          }));
+        }
+      }
+
+      function optionLabel(profile) {
+        return `${profile.name || profile.token} (${profile.token}${profile.resolution ? `, ${profile.resolution}` : ""})`;
+      }
+
+      function fillProfileSelect(select, profiles, value) {
+        select.replaceChildren();
+        profiles.forEach((profile) => {
+          const option = document.createElement("option");
+          option.value = profile.token;
+          option.textContent = optionLabel(profile);
+          select.appendChild(option);
+        });
+        select.value = value || profiles[0]?.token || "";
+      }
+
+      function setInputValue(id, value) {
+        document.getElementById(id).value = value ?? "";
+      }
+
+      async function loadSetup() {
+        setupMetaEl.textContent = "Consultando camera...";
+        setupProfilesListEl.replaceChildren();
+
+        try {
+          const response = await fetch("/api/setup");
+          const data = await response.json();
+          if (!data.ok) throw new Error(data.error || "Falha ao carregar setup");
+
+          const camera = data.camera || {};
+          const profiles = data.profiles || [];
+          setInputValue("setupCameraIp", camera.ip);
+          setInputValue("setupCameraPort", camera.port);
+          setInputValue("setupCameraUser", camera.user);
+          setInputValue("setupCameraPass", "");
+          setInputValue("setupSnapshotDir", camera.snapshotDir);
+          setInputValue("setupRecordingDir", camera.recordingDir);
+          document.getElementById("setupRtspTransport").value = camera.rtspTransport || "udp";
+          document.getElementById("setupEnableZoom").value = camera.enableZoom || "auto";
+
+          fillProfileSelect(document.getElementById("setupProfile"), profiles, camera.profile);
+          fillProfileSelect(document.getElementById("setupVideoProfile"), profiles, camera.videoProfile);
+          fillProfileSelect(document.getElementById("setupAudioProfile"), profiles, camera.audioProfile);
+
+          profiles.forEach((profile) => {
+            const row = document.createElement("div");
+            row.className = "info-value";
+            row.textContent = `${profile.token} - ${profile.name || "sem nome"} - ${profile.videoEncoding || "video"} - ${profile.resolution || "sem resolucao"} - PTZ: ${profile.hasPTZ ? "sim" : "nao"} - Audio: ${profile.hasAudio ? "sim" : "nao"}`;
+            setupProfilesListEl.appendChild(row);
+          });
+
+          setupMetaEl.textContent = data.device?.model
+            ? `${data.device.manufacturer || ""} ${data.device.model}`.trim()
+            : `${camera.ip}:${camera.port}`;
+        } catch (error) {
+          setupMetaEl.textContent = "Erro";
+          setupProfilesListEl.textContent = error.message;
+        }
+      }
+
+      async function saveSetup(event) {
+        event.preventDefault();
+        const formData = new FormData(setupFormEl);
+        const payload = {};
+        formData.forEach((value, key) => {
+          payload[key] = value;
+        });
+
+        try {
+          setupMetaEl.textContent = "Salvando...";
+          const response = await fetch("/api/setup", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+          const data = await response.json();
+          if (!data.ok) throw new Error(data.error || "Falha ao salvar setup");
+          setupMetaEl.textContent = "Configuracao salva.";
+          setStatus("Setup salvo.");
+          await loadConfig();
+          await loadSetup();
+        } catch (error) {
+          setupMetaEl.textContent = "Erro";
+          setStatus(error.message, true);
+        }
+      }
+
+      async function move(command, button) {
+        button?.classList.add("active");
+        setStatus(`Enviando ${command}...`);
+
+        try {
+          const response = await fetch("/api/move", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              command,
+              speed: Number(speedEl.value),
+              duration: Number(durationEl.value)
+            })
+          });
+          const data = await response.json();
+          if (!data.ok) throw new Error(data.error || "Falha no comando");
+          setStatus(`${command} enviado.`);
+        } catch (error) {
+          setStatus(error.message, true);
+        } finally {
+          setTimeout(() => button?.classList.remove("active"), 180);
+        }
+      }
+
+      function wireButtons() {
+        document.querySelectorAll("button[data-command]").forEach((button) => {
+          button.addEventListener("click", () => move(button.dataset.command, button));
+        });
+      }
+
+      async function captureSnapshot() {
+        snapshotButtonEl.classList.add("active");
+        snapshotButtonEl.disabled = true;
+        setStatus("Salvando print...");
+
+        try {
+          const response = await fetch("/api/snapshot", { method: "POST" });
+          const data = await response.json();
+          if (!data.ok) throw new Error(data.error || "Falha ao salvar print");
+          setStatus(`Print salvo: ${data.filename}`);
+        } catch (error) {
+          setStatus(error.message, true);
+        } finally {
+          snapshotButtonEl.classList.remove("active");
+          snapshotButtonEl.disabled = false;
+        }
+      }
+
+      function wireSnapshot() {
+        snapshotButtonEl.addEventListener("click", captureSnapshot);
+      }
+
+      function setRecording(enabled) {
+        recording = enabled;
+        recordButtonEl.classList.toggle("active", enabled);
+        recordButtonEl.textContent = enabled ? "Parar" : "Gravar";
+        recordButtonEl.title = enabled ? "Parar gravacao" : "Iniciar gravacao";
+      }
+
+      async function toggleRecording() {
+        recordButtonEl.disabled = true;
+        const action = recording ? "stop" : "start";
+        setStatus(recording ? "Parando gravacao..." : "Iniciando gravacao...");
+
+        try {
+          const response = await fetch("/api/record", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action })
+          });
+          const data = await response.json();
+          if (!data.ok) throw new Error(data.error || "Falha na gravacao");
+
+          if (action === "start") {
+            setRecording(true);
+            setStatus(`Gravando: ${data.recording.filename}`);
+          } else {
+            setRecording(false);
+            setStatus(`Gravacao salva: ${data.filename}`);
+          }
+        } catch (error) {
+          setStatus(error.message, true);
+        } finally {
+          recordButtonEl.disabled = false;
+        }
+      }
+
+      function wireRecording() {
+        recordButtonEl.addEventListener("click", toggleRecording);
+      }
+
+      function setAudioEnabled(enabled) {
+        audioEnabled = enabled;
+        audioToggleEl.classList.toggle("active", enabled);
+        audioToggleEl.textContent = enabled ? "Mudo" : "Audio";
+      }
+
+      async function toggleAudio() {
+        if (!hasAudioStream) {
+          setStatus("Audio indisponivel para este stream.", true);
+          return;
+        }
+
+        if (audioEnabled) {
+          audioStreamEl.pause();
+          audioStreamEl.removeAttribute("src");
+          audioStreamEl.load();
+          setAudioEnabled(false);
+          setStatus("Audio desligado.");
+          return;
+        }
+
+        try {
+          audioStreamEl.src = `/audio?refresh=${Date.now()}`;
+          audioStreamEl.volume = Number(volumeEl.value);
+          await audioStreamEl.play();
+          setAudioEnabled(true);
+          setStatus("Audio ligado.");
+        } catch (error) {
+          setAudioEnabled(false);
+          setStatus(error.message || "Nao foi possivel iniciar o audio.", true);
+        }
+      }
+
+      function wireAudio() {
+        audioToggleEl.addEventListener("click", toggleAudio);
+        volumeEl.addEventListener("input", () => {
+          audioStreamEl.volume = Number(volumeEl.value);
+        });
+        audioStreamEl.addEventListener("error", () => {
+          setAudioEnabled(false);
+          setStatus("Nao foi possivel carregar o audio.", true);
+        });
+      }
+
+      async function loadConfig() {
+        try {
+          const response = await fetch("/api/config");
+          const config = await response.json();
+          const deviceName = [config.device?.manufacturer, config.device?.model]
+            .filter(Boolean)
+            .join(" ");
+          const currentProfile = (config.profiles || [])
+            .find((profile) => profile.token === config.profile);
+          const profileName = currentProfile?.name || config.profile;
+          metaEl.textContent = deviceName
+            ? `${config.camera} · ${deviceName} · ${profileName}`
+            : `${config.camera} · ${profileName}`;
+
+          hasAudioStream = Boolean(config.hasAudioStream);
+          supportsZoom = Boolean(config.supportsZoom);
+          audioToggleEl.disabled = !hasAudioStream;
+          document.querySelectorAll('button[data-command="zoom-in"], button[data-command="zoom-out"]').forEach((button) => {
+            button.disabled = !supportsZoom;
+            button.title = supportsZoom ? button.title : "Esta camera nao anuncia suporte a zoom PTZ";
+          });
+          setRecording(Boolean(config.recording?.running));
+
+          if (config.hasBrowserStream) {
+            streamEl.src = config.directStream
+              ? config.streamUrl
+              : `/video?refresh=${Date.now()}`;
+            streamEl.style.display = "block";
+            placeholderEl.hidden = true;
+            streamEl.onerror = () => {
+              streamEl.style.display = "none";
+              placeholderEl.hidden = false;
+              streamTextEl.textContent = "Nao foi possivel carregar o stream HTTP configurado.";
+            };
+            return;
+          }
+
+          streamTextEl.textContent = config.ffmpegAvailable
+            ? "Preparando o stream RTSP convertido para o navegador..."
+            : "O navegador nao toca RTSP direto. Instale ffmpeg ou use uma URL HTTP/MJPEG em CAMERA_STREAM_URL para preencher este quadro.";
+          rtspEl.hidden = false;
+          rtspEl.textContent = config.streamUrl || "RTSP nao encontrado";
+        } catch (error) {
+          metaEl.textContent = "Erro";
+          streamTextEl.textContent = error.message;
+        }
+      }
+
+      wireNavigation();
+      wireImageModal();
+      wireButtons();
+      wireSnapshot();
+      wireRecording();
+      wireAudio();
+      showCamera();
+      loadConfig();
+    </script>
+  </body>
+</html>

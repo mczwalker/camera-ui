@@ -1,0 +1,25 @@
+# Local configuration
+.env
+CONTEXTO.md
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Generated media
+snapshots/
+recordings/
+.thumbs/
+
+# Local/generated vendor or export folders
+Microsoft/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+#logs
+server-identification-test.err.log
+server-identification-test.log
