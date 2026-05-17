@@ -78,7 +78,7 @@ Se `python`, `py` ou `ffmpeg` nao forem encontrados, adicione os caminhos ao Pat
 Dentro da pasta do projeto:
 
 ```powershell
-cd D:\projetos\camera-ui
+cd /caminho/para/camera-ui
 python -m pip install -r requirements.txt
 ```
 
