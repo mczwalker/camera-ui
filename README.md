@@ -16,6 +16,7 @@ O projeto fornece um painel simples para mover a camera, controlar zoom, assisti
 - Tela Identification com resumo, profiles, capacidades e detalhes ONVIF da camera.
 - Tela Setup para descobrir profiles e salvar a configuracao da camera no `.env`.
 - Configuracao por `.env`.
+- Modo vigilia com deteccao de movimento localizada e pre-gravacao configuravel.
 
 ## Tecnologias
 

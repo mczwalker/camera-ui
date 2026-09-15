@@ -1,6 +1,7 @@
 import shutil
 import subprocess
 import threading
+import time
 from collections import deque
 from datetime import datetime
 from pathlib import Path
@@ -285,6 +286,104 @@ def recording_status():
             "startedAt": RECORDING["started_at"],
             "bytes": size,
         }
+
+
+def start_recording(video_url, audio_url, prefix="recording"):
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        return {"ok": False, "status": 501, "error": "Gravacao RTSP precisa de ffmpeg."}
+
+    with RECORDING_LOCK:
+        process = RECORDING["process"]
+        if process and process.poll() is None:
+            return {"ok": False, "status": 409, "error": "Ja existe uma gravacao em andamento."}
+
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    filename = f"{prefix}-{timestamp}.mp4"
+    output_path = config.RECORDING_DIR / filename
+
+    try:
+        config.RECORDING_DIR.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        return {"ok": False, "status": 500, "error": f"Nao foi possivel criar a pasta de gravacoes: {exc}"}
+
+    command = build_ffmpeg_record_command(ffmpeg, video_url, audio_url, output_path)
+    process = subprocess.Popen(
+        command,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+    )
+    stderr_tail = drain_stderr(process)
+    time.sleep(0.6)
+    if process.poll() is not None:
+        detail = "\n".join(stderr_tail)
+        return {
+            "ok": False,
+            "status": 502,
+            "error": "ffmpeg encerrou antes de iniciar a gravacao.",
+            "detail": detail[-4000:],
+        }
+
+    with RECORDING_LOCK:
+        RECORDING.update(
+            {
+                "process": process,
+                "path": output_path,
+                "filename": filename,
+                "started_at": datetime.now().isoformat(timespec="seconds"),
+                "stderr": stderr_tail,
+            }
+        )
+
+    return {"ok": True, "recording": recording_status()}
+
+
+def stop_recording():
+    with RECORDING_LOCK:
+        process = RECORDING["process"]
+        output_path = RECORDING["path"]
+        filename = RECORDING["filename"]
+        stderr_tail = RECORDING["stderr"]
+
+        if not process or process.poll() is not None:
+            RECORDING["process"] = None
+            return {"ok": False, "status": 409, "error": "Nao ha gravacao em andamento."}
+
+    try:
+        if process.stdin:
+            process.stdin.write(b"q")
+            process.stdin.flush()
+        process.wait(timeout=8)
+    except Exception:
+        process.terminate()
+        try:
+            process.wait(timeout=4)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=4)
+
+    detail = "\n".join(stderr_tail or [])
+    bytes_written = output_path.stat().st_size if output_path and output_path.exists() else 0
+
+    with RECORDING_LOCK:
+        RECORDING.update(
+            {
+                "process": None,
+                "path": output_path,
+                "filename": filename,
+                "started_at": None,
+                "stderr": None,
+            }
+        )
+
+    return {
+        "ok": True,
+        "filename": filename,
+        "path": str(output_path) if output_path else None,
+        "bytes": bytes_written,
+        "detail": detail[-4000:],
+    }
 
 
 def start_recording_process(output_path, command):

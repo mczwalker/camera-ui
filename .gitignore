@@ -7,6 +7,8 @@ CONTEXTO.md
 # Python cache
 __pycache__/
 *.py[cod]
+.venv/
+venv/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
@@ -30,3 +32,6 @@ Thumbs.db
 # Logs
 *.log
 server-identification-test.err.log
+
+# Motion detection temporary files
+.watch_buffer

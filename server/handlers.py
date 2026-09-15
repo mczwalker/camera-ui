@@ -23,19 +23,19 @@ from camera_services import (
     rtsp_url_with_auth,
 )
 from media_services import (
-    RECORDING,
-    RECORDING_LOCK,
     build_ffmpeg_audio_command,
-    build_ffmpeg_record_command,
     build_ffmpeg_snapshot_command,
     build_ffmpeg_stream_command,
     build_ffmpeg_test_command,
     drain_stderr,
     media_items,
     recording_status,
+    start_recording,
+    stop_recording,
     stream_kind,
 )
 from network_services import network_status
+from vigilance_services import start_watch, stop_watch, watch_logs, watch_status
 from .responses import json_response
 
 CLIENT_DISCONNECT_ERRORS = (BrokenPipeError, ConnectionResetError, ConnectionAbortedError)
@@ -65,6 +65,16 @@ def setup_payload():
             "recordingDir": str(config.RECORDING_DIR),
             "streamUrl": config.STREAM_URL,
             "directStream": config.DIRECT_STREAM,
+            "motionIdleSeconds": config.MOTION_IDLE_SECONDS,
+            "motionThreshold": config.MOTION_THRESHOLD,
+            "motionFps": config.MOTION_FPS,
+            "motionWidth": config.MOTION_WIDTH,
+            "motionHeight": config.MOTION_HEIGHT,
+            "motionPixelThreshold": config.MOTION_PIXEL_THRESHOLD,
+            "motionChangedRatio": config.MOTION_CHANGED_RATIO,
+            "motionConfirmFrames": config.MOTION_CONFIRM_FRAMES,
+            "motionPreRecordSeconds": config.MOTION_PRE_RECORD_SECONDS,
+            "motionSegmentSeconds": config.MOTION_SEGMENT_SECONDS,
         },
         "profiles": profiles,
         "device": basic_device_info(),
@@ -113,6 +123,10 @@ class CameraHandler(BaseHTTPRequestHandler):
                     "snapshotDir": str(config.SNAPSHOT_DIR),
                     "recordingDir": str(config.RECORDING_DIR),
                     "recording": recording_status(),
+                    "watch": watch_status(),
+                    "motionPreRecordSeconds": config.MOTION_PRE_RECORD_SECONDS,
+                    "motionSegmentSeconds": config.MOTION_SEGMENT_SECONDS,
+                    "motionChangedRatio": config.MOTION_CHANGED_RATIO,
                 },
             )
             return
@@ -131,6 +145,14 @@ class CameraHandler(BaseHTTPRequestHandler):
 
         if parsed.path == "/api/network-status":
             json_response(self, 200, {"ok": True, **network_status()})
+            return
+
+        if parsed.path == "/api/watch":
+            json_response(self, 200, {"ok": True, "watch": watch_status()})
+            return
+
+        if parsed.path == "/api/watch/logs":
+            json_response(self, 200, {"ok": True, "items": watch_logs()})
             return
 
         if parsed.path == "/api/media/snapshots":
@@ -174,6 +196,10 @@ class CameraHandler(BaseHTTPRequestHandler):
 
         if parsed.path == "/api/record":
             self.handle_recording()
+            return
+
+        if parsed.path == "/api/watch":
+            self.handle_watch()
             return
 
         if parsed.path == "/api/setup":
@@ -387,6 +413,27 @@ class CameraHandler(BaseHTTPRequestHandler):
 
         json_response(self, 400, {"ok": False, "error": "Acao de gravacao invalida"})
 
+    def handle_watch(self):
+        length = int(self.headers.get("Content-Length", "0") or "0")
+        raw_body = self.rfile.read(length).decode("utf-8") if length else "{}"
+
+        try:
+            payload = json.loads(raw_body)
+        except json.JSONDecodeError:
+            json_response(self, 400, {"ok": False, "error": "JSON invalido"})
+            return
+
+        action = payload.get("action")
+        if action == "start":
+            json_response(self, 200, {"ok": True, "watch": start_watch()})
+            return
+
+        if action == "stop":
+            json_response(self, 200, {"ok": True, "watch": stop_watch()})
+            return
+
+        json_response(self, 400, {"ok": False, "error": "Acao de vigilia invalida"})
+
     def save_setup(self):
         length = int(self.headers.get("Content-Length", "0") or "0")
         raw_body = self.rfile.read(length).decode("utf-8") if length else "{}"
@@ -409,6 +456,16 @@ class CameraHandler(BaseHTTPRequestHandler):
             "CAMERA_ENABLE_ZOOM",
             "CAMERA_SNAPSHOT_DIR",
             "CAMERA_RECORDING_DIR",
+            "CAMERA_MOTION_IDLE_SECONDS",
+            "CAMERA_MOTION_THRESHOLD",
+            "CAMERA_MOTION_FPS",
+            "CAMERA_MOTION_WIDTH",
+            "CAMERA_MOTION_HEIGHT",
+            "CAMERA_MOTION_PIXEL_THRESHOLD",
+            "CAMERA_MOTION_CHANGED_RATIO",
+            "CAMERA_MOTION_CONFIRM_FRAMES",
+            "CAMERA_MOTION_PRE_RECORD_SECONDS",
+            "CAMERA_MOTION_SEGMENT_SECONDS",
             "CAMERA_STREAM_URL",
             "CAMERA_DIRECT_STREAM",
         }
@@ -436,6 +493,47 @@ class CameraHandler(BaseHTTPRequestHandler):
             json_response(self, 400, {"ok": False, "error": "CAMERA_ENABLE_ZOOM invalido"})
             return
 
+        for key in {"CAMERA_MOTION_IDLE_SECONDS", "CAMERA_MOTION_WIDTH", "CAMERA_MOTION_HEIGHT"}:
+            if key in updates:
+                try:
+                    if int(updates[key]) <= 0:
+                        raise ValueError
+                except ValueError:
+                    json_response(self, 400, {"ok": False, "error": f"{key} invalido"})
+                    return
+
+        for key in {"CAMERA_MOTION_THRESHOLD", "CAMERA_MOTION_FPS"}:
+            if key in updates:
+                try:
+                    if float(updates[key]) <= 0:
+                        raise ValueError
+                except ValueError:
+                    json_response(self, 400, {"ok": False, "error": f"{key} invalido"})
+                    return
+
+        for key in {
+            "CAMERA_MOTION_PIXEL_THRESHOLD",
+            "CAMERA_MOTION_CONFIRM_FRAMES",
+            "CAMERA_MOTION_PRE_RECORD_SECONDS",
+            "CAMERA_MOTION_SEGMENT_SECONDS",
+        }:
+            if key in updates:
+                try:
+                    if int(updates[key]) <= 0:
+                        raise ValueError
+                except ValueError:
+                    json_response(self, 400, {"ok": False, "error": f"{key} invalido"})
+                    return
+
+        if "CAMERA_MOTION_CHANGED_RATIO" in updates:
+            try:
+                ratio = float(updates["CAMERA_MOTION_CHANGED_RATIO"])
+                if not 0 < ratio <= 1:
+                    raise ValueError
+            except ValueError:
+                json_response(self, 400, {"ok": False, "error": "CAMERA_MOTION_CHANGED_RATIO invalido"})
+                return
+
         try:
             config.save_dotenv(updates)
             config.apply_runtime_config(updates)
@@ -447,150 +545,15 @@ class CameraHandler(BaseHTTPRequestHandler):
         json_response(self, 200, {"ok": True, **setup_payload()})
 
     def start_recording(self):
-        ffmpeg = shutil.which("ffmpeg")
-        if not ffmpeg:
-            json_response(
-                self,
-                501,
-                {
-                    "ok": False,
-                    "error": "Gravacao RTSP precisa de ffmpeg.",
-                },
-            )
-            return
-
-        with RECORDING_LOCK:
-            process = RECORDING["process"]
-            if process and process.poll() is None:
-                json_response(
-                    self,
-                    409,
-                    {
-                        "ok": False,
-                        "error": "Ja existe uma gravacao em andamento.",
-                    },
-                )
-                return
-
         args = camera_args(timeout=8.0)
         video_url = rtsp_url_with_auth(config.STREAM_URL or get_rtsp_uri(), args)
         audio_url = rtsp_url_with_auth(get_rtsp_uri(config.AUDIO_PROFILE), args)
-        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        filename = f"recording-{timestamp}.mp4"
-        output_path = config.RECORDING_DIR / filename
-
-        try:
-            config.RECORDING_DIR.mkdir(parents=True, exist_ok=True)
-        except OSError as exc:
-            json_response(
-                self,
-                500,
-                {
-                    "ok": False,
-                    "error": f"Nao foi possivel criar a pasta de gravacoes: {exc}",
-                },
-            )
-            return
-
-        command = build_ffmpeg_record_command(ffmpeg, video_url, audio_url, output_path)
-        process = subprocess.Popen(
-            command,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
-        )
-        stderr_tail = drain_stderr(process)
-        time.sleep(0.6)
-        if process.poll() is not None:
-            detail = "\n".join(stderr_tail)
-            json_response(
-                self,
-                502,
-                {
-                    "ok": False,
-                    "error": "ffmpeg encerrou antes de iniciar a gravacao.",
-                    "detail": detail[-4000:],
-                },
-            )
-            return
-
-        with RECORDING_LOCK:
-            RECORDING.update(
-                {
-                    "process": process,
-                    "path": output_path,
-                    "filename": filename,
-                    "started_at": datetime.now().isoformat(timespec="seconds"),
-                    "stderr": stderr_tail,
-                }
-            )
-
-        json_response(
-            self,
-            200,
-            {
-                "ok": True,
-                "recording": recording_status(),
-            },
-        )
+        result = start_recording(video_url, audio_url)
+        json_response(self, result.pop("status", 200), result)
 
     def stop_recording(self):
-        with RECORDING_LOCK:
-            process = RECORDING["process"]
-            output_path = RECORDING["path"]
-            filename = RECORDING["filename"]
-            stderr_tail = RECORDING["stderr"]
-
-            if not process or process.poll() is not None:
-                RECORDING["process"] = None
-                json_response(
-                    self,
-                    409,
-                    {
-                        "ok": False,
-                        "error": "Nao ha gravacao em andamento.",
-                    },
-                )
-                return
-
-        try:
-            if process.stdin:
-                process.stdin.write(b"q")
-                process.stdin.flush()
-            process.wait(timeout=8)
-        except Exception:
-            process.terminate()
-            try:
-                process.wait(timeout=4)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait(timeout=4)
-
-        detail = "\n".join(stderr_tail or [])
-        bytes_written = output_path.stat().st_size if output_path and output_path.exists() else 0
-
-        with RECORDING_LOCK:
-            RECORDING.update(
-                {
-                    "process": None,
-                    "path": output_path,
-                    "filename": filename,
-                    "started_at": None,
-                    "stderr": None,
-                }
-            )
-
-        json_response(
-            self,
-            200,
-            {
-                "ok": True,
-                "filename": filename,
-                "path": str(output_path) if output_path else None,
-                "bytes": bytes_written,
-                "detail": detail[-4000:],
-            },
-        )
+        result = stop_recording()
+        json_response(self, result.pop("status", 200), result)
 
     def serve_file(self, path, content_type):
         try:

@@ -393,6 +393,32 @@
         gap: 12px;
       }
 
+      .watch-logs-list {
+        margin-top: 14px;
+        display: grid;
+        gap: 8px;
+      }
+
+      .watch-log {
+        display: grid;
+        grid-template-columns: 170px minmax(0, 1fr);
+        gap: 12px;
+        padding: 12px 14px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+      }
+
+      .watch-log-time {
+        color: var(--muted);
+        font-size: 13px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .watch-log-message {
+        overflow-wrap: anywhere;
+      }
+
       .summary-grid {
         margin-top: 14px;
         display: grid;
@@ -579,6 +605,13 @@
           min-height: 220px;
         }
       }
+
+      @media (max-width: 560px) {
+        .watch-log {
+          grid-template-columns: 1fr;
+          gap: 4px;
+        }
+      }
     </style>
   </head>
   <body>
@@ -588,6 +621,7 @@
         <button id="cameraViewButton" type="button">Camera</button>
         <button id="snapshotsViewButton" type="button">Snapshots</button>
         <button id="recordingsViewButton" type="button">Recordings</button>
+        <button id="watchLogsViewButton" type="button">Logs Vigília</button>
         <button id="identificationViewButton" type="button">Identification</button>
         <button id="setupViewButton" type="button">Setup</button>
       </div>
@@ -655,6 +689,7 @@
           <h2>Gravacao</h2>
           <div class="capture-row">
             <button id="recordButton" type="button" title="Iniciar gravacao">Gravar</button>
+            <button id="watchButton" type="button" title="Ativar modo vigilia">Vigilia</button>
           </div>
         </div>
 
@@ -695,6 +730,18 @@
         <button id="identificationRefreshButton" type="button">Atualizar</button>
       </div>
       <div id="identificationGrid" class="info-grid"></div>
+    </section>
+
+    <section id="watchLogsView" class="identification" hidden>
+      <div class="gallery-head">
+        <div>
+          <div class="title">Logs Vigília</div>
+          <div id="watchLogsMeta" class="meta">Carregando...</div>
+        </div>
+        <button id="watchLogsRefreshButton" type="button">Atualizar</button>
+      </div>
+      <div id="watchLogsList" class="watch-logs-list"></div>
+      <div id="emptyWatchLogs" class="empty-gallery" hidden>Nenhum log registrado.</div>
     </section>
 
     <section id="setupView" class="identification" hidden>
@@ -746,6 +793,22 @@
         </article>
 
         <article class="info-card">
+          <h2>Vigilia</h2>
+          <div class="info-list form-grid">
+            <label>Parar apos segundos<input id="setupMotionIdleSeconds" name="CAMERA_MOTION_IDLE_SECONDS" type="number" min="5" max="3600"></label>
+            <label>Limiar<input id="setupMotionThreshold" name="CAMERA_MOTION_THRESHOLD" type="number" min="1" max="100" step="0.5"></label>
+            <label>FPS analise<input id="setupMotionFps" name="CAMERA_MOTION_FPS" type="number" min="0.2" max="10" step="0.2"></label>
+            <label>Largura analise<input id="setupMotionWidth" name="CAMERA_MOTION_WIDTH" type="number" min="32" max="640"></label>
+            <label>Altura analise<input id="setupMotionHeight" name="CAMERA_MOTION_HEIGHT" type="number" min="32" max="480"></label>
+            <label>Limiar de pixel<input id="setupMotionPixelThreshold" name="CAMERA_MOTION_PIXEL_THRESHOLD" type="number" min="1" max="255"></label>
+            <label>Percentual alterado<input id="setupMotionChangedRatio" name="CAMERA_MOTION_CHANGED_RATIO" type="number" min="0.001" max="1" step="0.001"></label>
+            <label>Frames para confirmar<input id="setupMotionConfirmFrames" name="CAMERA_MOTION_CONFIRM_FRAMES" type="number" min="1" max="10"></label>
+            <label>Pre-gravacao (segundos)<input id="setupMotionPreRecordSeconds" name="CAMERA_MOTION_PRE_RECORD_SECONDS" type="number" min="2" max="120"></label>
+            <label>Segmento do buffer (segundos)<input id="setupMotionSegmentSeconds" name="CAMERA_MOTION_SEGMENT_SECONDS" type="number" min="1" max="10"></label>
+          </div>
+        </article>
+
+        <article class="info-card">
           <h2>Profiles detectados</h2>
           <div id="setupProfilesList" class="info-list"></div>
         </article>
@@ -773,14 +836,17 @@
       const cameraViewEl = document.getElementById("cameraView");
       const galleryViewEl = document.getElementById("galleryView");
       const identificationViewEl = document.getElementById("identificationView");
+      const watchLogsViewEl = document.getElementById("watchLogsView");
       const setupViewEl = document.getElementById("setupView");
       const cameraViewButtonEl = document.getElementById("cameraViewButton");
       const snapshotsViewButtonEl = document.getElementById("snapshotsViewButton");
       const recordingsViewButtonEl = document.getElementById("recordingsViewButton");
+      const watchLogsViewButtonEl = document.getElementById("watchLogsViewButton");
       const identificationViewButtonEl = document.getElementById("identificationViewButton");
       const setupViewButtonEl = document.getElementById("setupViewButton");
       const galleryRefreshButtonEl = document.getElementById("galleryRefreshButton");
       const identificationRefreshButtonEl = document.getElementById("identificationRefreshButton");
+      const watchLogsRefreshButtonEl = document.getElementById("watchLogsRefreshButton");
       const setupRefreshButtonEl = document.getElementById("setupRefreshButton");
       const galleryTitleEl = document.getElementById("galleryTitle");
       const galleryMetaEl = document.getElementById("galleryMeta");
@@ -788,6 +854,9 @@
       const emptyGalleryEl = document.getElementById("emptyGallery");
       const identificationMetaEl = document.getElementById("identificationMeta");
       const identificationGridEl = document.getElementById("identificationGrid");
+      const watchLogsMetaEl = document.getElementById("watchLogsMeta");
+      const watchLogsListEl = document.getElementById("watchLogsList");
+      const emptyWatchLogsEl = document.getElementById("emptyWatchLogs");
       const setupMetaEl = document.getElementById("setupMeta");
       const setupFormEl = document.getElementById("setupForm");
       const setupProfilesListEl = document.getElementById("setupProfilesList");
@@ -807,9 +876,11 @@
       const volumeEl = document.getElementById("volume");
       const snapshotButtonEl = document.getElementById("snapshotButton");
       const recordButtonEl = document.getElementById("recordButton");
+      const watchButtonEl = document.getElementById("watchButton");
       let hasAudioStream = false;
       let audioEnabled = false;
       let recording = false;
+      let watchEnabled = false;
       let supportsZoom = true;
       let currentGallery = "snapshots";
 
@@ -834,10 +905,12 @@
         cameraViewEl.hidden = false;
         galleryViewEl.hidden = true;
         identificationViewEl.hidden = true;
+        watchLogsViewEl.hidden = true;
         setupViewEl.hidden = true;
         cameraViewButtonEl.classList.add("active");
         snapshotsViewButtonEl.classList.remove("active");
         recordingsViewButtonEl.classList.remove("active");
+        watchLogsViewButtonEl.classList.remove("active");
         identificationViewButtonEl.classList.remove("active");
         setupViewButtonEl.classList.remove("active");
       }
@@ -847,10 +920,12 @@
         cameraViewEl.hidden = true;
         galleryViewEl.hidden = false;
         identificationViewEl.hidden = true;
+        watchLogsViewEl.hidden = true;
         setupViewEl.hidden = true;
         cameraViewButtonEl.classList.remove("active");
         snapshotsViewButtonEl.classList.toggle("active", kind === "snapshots");
         recordingsViewButtonEl.classList.toggle("active", kind === "recordings");
+        watchLogsViewButtonEl.classList.remove("active");
         identificationViewButtonEl.classList.remove("active");
         setupViewButtonEl.classList.remove("active");
         await loadGallery(kind);
@@ -860,23 +935,42 @@
         cameraViewEl.hidden = true;
         galleryViewEl.hidden = true;
         identificationViewEl.hidden = false;
+        watchLogsViewEl.hidden = true;
         setupViewEl.hidden = true;
         cameraViewButtonEl.classList.remove("active");
         snapshotsViewButtonEl.classList.remove("active");
         recordingsViewButtonEl.classList.remove("active");
+        watchLogsViewButtonEl.classList.remove("active");
         identificationViewButtonEl.classList.add("active");
         setupViewButtonEl.classList.remove("active");
         await loadIdentification();
+      }
+
+      async function showWatchLogs() {
+        cameraViewEl.hidden = true;
+        galleryViewEl.hidden = true;
+        identificationViewEl.hidden = true;
+        watchLogsViewEl.hidden = false;
+        setupViewEl.hidden = true;
+        cameraViewButtonEl.classList.remove("active");
+        snapshotsViewButtonEl.classList.remove("active");
+        recordingsViewButtonEl.classList.remove("active");
+        watchLogsViewButtonEl.classList.add("active");
+        identificationViewButtonEl.classList.remove("active");
+        setupViewButtonEl.classList.remove("active");
+        await loadWatchLogs();
       }
 
       async function showSetup() {
         cameraViewEl.hidden = true;
         galleryViewEl.hidden = true;
         identificationViewEl.hidden = true;
+        watchLogsViewEl.hidden = true;
         setupViewEl.hidden = false;
         cameraViewButtonEl.classList.remove("active");
         snapshotsViewButtonEl.classList.remove("active");
         recordingsViewButtonEl.classList.remove("active");
+        watchLogsViewButtonEl.classList.remove("active");
         identificationViewButtonEl.classList.remove("active");
         setupViewButtonEl.classList.add("active");
         await loadSetup();
@@ -1016,14 +1110,52 @@
         }
       }
 
+      async function loadWatchLogs() {
+        watchLogsMetaEl.textContent = "Carregando...";
+        watchLogsListEl.replaceChildren();
+        emptyWatchLogsEl.hidden = true;
+
+        try {
+          const response = await fetch("/api/watch/logs");
+          const data = await response.json();
+          if (!data.ok) throw new Error(data.error || "Falha ao carregar logs");
+
+          data.items.forEach((item) => {
+            const row = document.createElement("article");
+            row.className = "watch-log";
+
+            const timestamp = document.createElement("time");
+            timestamp.className = "watch-log-time";
+            timestamp.dateTime = item.timestamp;
+            timestamp.textContent = item.timestamp;
+
+            const message = document.createElement("div");
+            message.className = "watch-log-message";
+            message.textContent = item.message;
+
+            row.append(timestamp, message);
+            watchLogsListEl.appendChild(row);
+          });
+
+          emptyWatchLogsEl.hidden = data.items.length > 0;
+          watchLogsMetaEl.textContent = `${data.items.length} evento(s) · mais recentes primeiro`;
+        } catch (error) {
+          watchLogsMetaEl.textContent = "Erro";
+          emptyWatchLogsEl.hidden = false;
+          emptyWatchLogsEl.textContent = error.message;
+        }
+      }
+
       function wireNavigation() {
         cameraViewButtonEl.addEventListener("click", showCamera);
         snapshotsViewButtonEl.addEventListener("click", () => showGallery("snapshots"));
         recordingsViewButtonEl.addEventListener("click", () => showGallery("recordings"));
+        watchLogsViewButtonEl.addEventListener("click", showWatchLogs);
         identificationViewButtonEl.addEventListener("click", showIdentification);
         setupViewButtonEl.addEventListener("click", showSetup);
         galleryRefreshButtonEl.addEventListener("click", () => loadGallery(currentGallery));
         identificationRefreshButtonEl.addEventListener("click", loadIdentification);
+        watchLogsRefreshButtonEl.addEventListener("click", loadWatchLogs);
         setupRefreshButtonEl.addEventListener("click", loadSetup);
         setupFormEl.addEventListener("submit", saveSetup);
       }
@@ -1229,6 +1361,16 @@
           setInputValue("setupCameraPass", "");
           setInputValue("setupSnapshotDir", camera.snapshotDir);
           setInputValue("setupRecordingDir", camera.recordingDir);
+          setInputValue("setupMotionIdleSeconds", camera.motionIdleSeconds);
+          setInputValue("setupMotionThreshold", camera.motionThreshold);
+          setInputValue("setupMotionFps", camera.motionFps);
+          setInputValue("setupMotionWidth", camera.motionWidth);
+          setInputValue("setupMotionHeight", camera.motionHeight);
+          setInputValue("setupMotionPixelThreshold", camera.motionPixelThreshold);
+          setInputValue("setupMotionChangedRatio", camera.motionChangedRatio);
+          setInputValue("setupMotionConfirmFrames", camera.motionConfirmFrames);
+          setInputValue("setupMotionPreRecordSeconds", camera.motionPreRecordSeconds);
+          setInputValue("setupMotionSegmentSeconds", camera.motionSegmentSeconds);
           document.getElementById("setupRtspTransport").value = camera.rtspTransport || "udp";
           document.getElementById("setupEnableZoom").value = camera.enableZoom || "auto";
 
@@ -1370,6 +1512,41 @@
         recordButtonEl.addEventListener("click", toggleRecording);
       }
 
+      function setWatch(enabled) {
+        watchEnabled = enabled;
+        watchButtonEl.classList.toggle("active", enabled);
+        watchButtonEl.textContent = enabled ? "Parar vigilia" : "Vigilia";
+        watchButtonEl.title = enabled ? "Desativar modo vigilia" : "Ativar modo vigilia";
+      }
+
+      async function toggleWatch() {
+        watchButtonEl.disabled = true;
+        const action = watchEnabled ? "stop" : "start";
+        setStatus(watchEnabled ? "Desativando modo vigilia..." : "Ativando modo vigilia...");
+
+        try {
+          const response = await fetch("/api/watch", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action })
+          });
+          const data = await response.json();
+          if (!data.ok) throw new Error(data.error || "Falha no modo vigilia");
+
+          setWatch(Boolean(data.watch?.enabled));
+          const suffix = data.watch?.idleSeconds ? ` (${data.watch.idleSeconds}s sem movimento para parar)` : "";
+          setStatus(data.watch?.enabled ? `Modo vigilia ativo${suffix}.` : "Modo vigilia desativado.");
+        } catch (error) {
+          setStatus(error.message, true);
+        } finally {
+          watchButtonEl.disabled = false;
+        }
+      }
+
+      function wireWatch() {
+        watchButtonEl.addEventListener("click", toggleWatch);
+      }
+
       function setAudioEnabled(enabled) {
         audioEnabled = enabled;
         audioToggleEl.classList.toggle("active", enabled);
@@ -1436,6 +1613,11 @@
             button.title = supportsZoom ? button.title : "Esta camera nao anuncia suporte a zoom PTZ";
           });
           setRecording(Boolean(config.recording?.running));
+          setWatch(Boolean(config.watch?.enabled));
+          watchButtonEl.disabled = !config.ffmpegAvailable;
+          if (!config.ffmpegAvailable) {
+            watchButtonEl.title = "Modo vigilia precisa de ffmpeg";
+          }
 
           if (config.hasBrowserStream) {
             streamEl.src = config.directStream
@@ -1467,6 +1649,7 @@
       wireButtons();
       wireSnapshot();
       wireRecording();
+      wireWatch();
       wireAudio();
       showCamera();
       loadConfig();
