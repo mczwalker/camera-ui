@@ -754,6 +754,13 @@
       </div>
       <form id="setupForm" class="setup-form">
         <article class="info-card">
+          <h2>Acesso protegido</h2>
+          <div class="info-list form-grid">
+            <label>Token do Setup<input id="setupToken" type="password" autocomplete="off" placeholder="token configurado no servidor"></label>
+          </div>
+        </article>
+
+        <article class="info-card">
           <h2>Camera</h2>
           <div class="info-list form-grid">
             <label>IP<input id="setupCameraIp" name="CAMERA_IP"></label>
@@ -883,6 +890,7 @@
       let watchEnabled = false;
       let supportsZoom = true;
       let currentGallery = "snapshots";
+      let setupLoaded = false;
 
       function setStatus(text, failed = false) {
         statusEl.textContent = text;
@@ -1158,6 +1166,13 @@
         watchLogsRefreshButtonEl.addEventListener("click", loadWatchLogs);
         setupRefreshButtonEl.addEventListener("click", loadSetup);
         setupFormEl.addEventListener("submit", saveSetup);
+        document.getElementById("setupToken").addEventListener("keydown", (event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            rememberSetupToken();
+            loadSetup();
+          }
+        });
       }
 
       function infoCard(section) {
@@ -1344,12 +1359,26 @@
         document.getElementById(id).value = value ?? "";
       }
 
+      function setupHeaders() {
+        const tokenEl = document.getElementById("setupToken");
+        const token = tokenEl.value || sessionStorage.getItem("camera-ui-setup-token") || "";
+        return token ? { "X-Setup-Token": token } : {};
+      }
+
+      function rememberSetupToken() {
+        const token = document.getElementById("setupToken").value.trim();
+        if (token) sessionStorage.setItem("camera-ui-setup-token", token);
+      }
+
       async function loadSetup() {
+        setupLoaded = false;
         setupMetaEl.textContent = "Consultando camera...";
         setupProfilesListEl.replaceChildren();
 
         try {
-          const response = await fetch("/api/setup");
+          const tokenEl = document.getElementById("setupToken");
+          tokenEl.value = sessionStorage.getItem("camera-ui-setup-token") || tokenEl.value;
+          const response = await fetch("/api/setup", { headers: setupHeaders() });
           const data = await response.json();
           if (!data.ok) throw new Error(data.error || "Falha ao carregar setup");
 
@@ -1388,6 +1417,7 @@
           setupMetaEl.textContent = data.device?.model
             ? `${data.device.manufacturer || ""} ${data.device.model}`.trim()
             : `${camera.ip}:${camera.port}`;
+          setupLoaded = true;
         } catch (error) {
           setupMetaEl.textContent = "Erro";
           setupProfilesListEl.textContent = error.message;
@@ -1396,6 +1426,12 @@
 
       async function saveSetup(event) {
         event.preventDefault();
+        rememberSetupToken();
+        if (!setupLoaded) {
+          await loadSetup();
+          if (setupLoaded) setStatus("Token aceito. Configuracao carregada.");
+          return;
+        }
         const formData = new FormData(setupFormEl);
         const payload = {};
         formData.forEach((value, key) => {
@@ -1406,7 +1442,7 @@
           setupMetaEl.textContent = "Salvando...";
           const response = await fetch("/api/setup", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", ...setupHeaders() },
             body: JSON.stringify(payload)
           });
           const data = await response.json();

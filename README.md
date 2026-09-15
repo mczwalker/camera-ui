@@ -17,6 +17,7 @@ O projeto fornece um painel simples para mover a camera, controlar zoom, assisti
 - Tela Setup para descobrir profiles e salvar a configuracao da camera no `.env`.
 - Configuracao por `.env`.
 - Modo vigilia com deteccao de movimento localizada e pre-gravacao configuravel.
+- Logs do modo vigilia persistidos em `watch.log` no formato JSON Lines.
 
 ## Tecnologias
 
@@ -63,6 +64,19 @@ Edite o `.env` com os dados da camera e rode:
 ```powershell
 python app.py
 ```
+
+Defina tambem um token para proteger a tela Setup:
+
+```env
+CAMERA_UI_SETUP_TOKEN=gere-um-token-local-forte
+```
+
+Sem esse token, os endpoints `/api/setup` ficam bloqueados. O token informado
+na tela fica somente na sessao do navegador e e enviado no cabecalho
+`X-Setup-Token`; ele nao e salvo novamente pelo formulario.
+
+Ao salvar configuracoes, o sistema cria `.env.backup` e substitui o `.env`
+de forma atomica. A senha da camera nunca e devolvida pela API Setup.
 
 Acesse:
 

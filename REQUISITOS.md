@@ -97,6 +97,16 @@ cd D:\projetos\camera-ui
 python app.py
 ```
 
+Antes de usar a tela Setup, configure no `.env` um token administrativo local:
+
+```text
+CAMERA_UI_SETUP_TOKEN=gere-um-token-local-forte
+```
+
+O token protege a leitura e a gravação das configurações. O `.env` original é
+preservado em `.env.backup` durante uma alteração e a substituição é feita de
+forma atômica.
+
 Acesse:
 
 ```text

@@ -1,4 +1,6 @@
 import os
+import shutil
+import tempfile
 from pathlib import Path
 
 from camera import DEFAULT_PROFILE
@@ -58,12 +60,66 @@ def save_dotenv(updates):
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def save_dotenv_atomic(updates):
+    path = ROOT / ".env"
+    lines = []
+    seen = set()
+
+    try:
+        existing = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        existing = []
+
+    for line in existing:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            lines.append(line)
+            continue
+
+        key = stripped.split("=", 1)[0].strip()
+        if key in updates:
+            lines.append(f"{key}={updates[key]}")
+            seen.add(key)
+        else:
+            lines.append(line)
+
+    for key, value in updates.items():
+        if key not in seen:
+            lines.append(f"{key}={value}")
+
+    content = "\n".join(lines) + "\n"
+    backup_path = path.with_name(".env.backup")
+    temp_path = None
+    try:
+        if path.exists():
+            shutil.copy2(path, backup_path)
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            newline="\n",
+            dir=ROOT,
+            prefix=".env.",
+            suffix=".tmp",
+            delete=False,
+        ) as temp_file:
+            temp_file.write(content)
+            temp_file.flush()
+            os.fsync(temp_file.fileno())
+            temp_path = Path(temp_file.name)
+        os.replace(temp_path, path)
+    except OSError:
+        if temp_path:
+            temp_path.unlink(missing_ok=True)
+        raise
+
+
 def refresh():
     global APP_HOST, APP_PORT, STREAM_URL, DIRECT_STREAM, RTSP_TRANSPORT, VIDEO_PROFILE
     global AUDIO_PROFILE, ENABLE_ZOOM, SNAPSHOT_DIR, RECORDING_DIR, THUMB_DIR
     global MOTION_IDLE_SECONDS, MOTION_THRESHOLD, MOTION_FPS, MOTION_WIDTH, MOTION_HEIGHT
     global MOTION_PIXEL_THRESHOLD, MOTION_CHANGED_RATIO, MOTION_CONFIRM_FRAMES
-    global MOTION_PRE_RECORD_SECONDS, MOTION_SEGMENT_SECONDS, MOTION_BUFFER_DIR
+    global MOTION_PRE_RECORD_SECONDS, MOTION_SEGMENT_SECONDS, MOTION_BUFFER_DIR, WATCH_LOG_FILE
+    global SETUP_TOKEN
 
     APP_HOST = os.getenv("CAMERA_UI_HOST", "0.0.0.0")
     APP_PORT = int(os.getenv("CAMERA_UI_PORT", "8000"))
@@ -87,6 +143,8 @@ def refresh():
     MOTION_PRE_RECORD_SECONDS = int(os.getenv("CAMERA_MOTION_PRE_RECORD_SECONDS", "10"))
     MOTION_SEGMENT_SECONDS = int(os.getenv("CAMERA_MOTION_SEGMENT_SECONDS", "2"))
     MOTION_BUFFER_DIR = ROOT / ".watch_buffer"
+    WATCH_LOG_FILE = Path(os.getenv("CAMERA_WATCH_LOG_FILE", str(ROOT / "watch.log")))
+    SETUP_TOKEN = os.getenv("CAMERA_UI_SETUP_TOKEN", "")
 
 
 def apply_runtime_config(updates):

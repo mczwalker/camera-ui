@@ -1,4 +1,5 @@
 import json
+import hmac
 import shutil
 import subprocess
 import time
@@ -75,10 +76,17 @@ def setup_payload():
             "motionConfirmFrames": config.MOTION_CONFIRM_FRAMES,
             "motionPreRecordSeconds": config.MOTION_PRE_RECORD_SECONDS,
             "motionSegmentSeconds": config.MOTION_SEGMENT_SECONDS,
+            "watchLogFile": str(config.WATCH_LOG_FILE),
         },
         "profiles": profiles,
         "device": basic_device_info(),
     }
+
+
+def setup_authorized(handler):
+    configured_token = config.SETUP_TOKEN
+    provided_token = handler.headers.get("X-Setup-Token", "")
+    return bool(configured_token) and hmac.compare_digest(provided_token, configured_token)
 
 class CameraHandler(BaseHTTPRequestHandler):
     server_version = "CameraUI/1.0"
@@ -140,6 +148,9 @@ class CameraHandler(BaseHTTPRequestHandler):
             return
 
         if parsed.path == "/api/setup":
+            if not setup_authorized(self):
+                json_response(self, 401, {"ok": False, "error": "Setup protegido. Informe um token valido."})
+                return
             json_response(self, 200, {"ok": True, **setup_payload()})
             return
 
@@ -435,6 +446,10 @@ class CameraHandler(BaseHTTPRequestHandler):
         json_response(self, 400, {"ok": False, "error": "Acao de vigilia invalida"})
 
     def save_setup(self):
+        if not setup_authorized(self):
+            json_response(self, 401, {"ok": False, "error": "Setup protegido. Informe um token valido."})
+            return
+
         length = int(self.headers.get("Content-Length", "0") or "0")
         raw_body = self.rfile.read(length).decode("utf-8") if length else "{}"
 
@@ -466,6 +481,7 @@ class CameraHandler(BaseHTTPRequestHandler):
             "CAMERA_MOTION_CONFIRM_FRAMES",
             "CAMERA_MOTION_PRE_RECORD_SECONDS",
             "CAMERA_MOTION_SEGMENT_SECONDS",
+            "CAMERA_WATCH_LOG_FILE",
             "CAMERA_STREAM_URL",
             "CAMERA_DIRECT_STREAM",
         }
@@ -535,7 +551,7 @@ class CameraHandler(BaseHTTPRequestHandler):
                 return
 
         try:
-            config.save_dotenv(updates)
+            config.save_dotenv_atomic(updates)
             config.apply_runtime_config(updates)
             refresh_runtime_aliases()
         except OSError as exc:

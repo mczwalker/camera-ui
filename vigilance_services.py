@@ -1,3 +1,4 @@
+import json
 import shutil
 import subprocess
 import threading
@@ -34,6 +35,36 @@ WATCH = {
     "last_error": None,
 }
 WATCH_LOGS = deque(maxlen=500)
+
+
+def _load_watch_logs():
+    try:
+        lines = config.WATCH_LOG_FILE.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return
+
+    for line in reversed(lines):
+        try:
+            entry = json.loads(line)
+        except (TypeError, ValueError):
+            continue
+        if not isinstance(entry, dict) or not entry.get("message") or not entry.get("timestamp"):
+            continue
+        WATCH_LOGS.append(entry)
+        if len(WATCH_LOGS) >= WATCH_LOGS.maxlen:
+            break
+
+
+def _persist_watch_log(entry):
+    try:
+        config.WATCH_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with config.WATCH_LOG_FILE.open("a", encoding="utf-8") as log_file:
+            log_file.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except OSError as exc:
+        print(f"Nao foi possivel persistir log da vigilia: {exc}", flush=True)
+
+
+_load_watch_logs()
 
 
 def _buffer_command(ffmpeg, video_url, audio_url):
@@ -244,6 +275,7 @@ def _log_watch(message):
     }
     with WATCH_LOCK:
         WATCH_LOGS.appendleft(entry)
+    _persist_watch_log(entry)
     print(entry["text"], flush=True)
 
 
